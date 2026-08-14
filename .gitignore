@@ -31,3 +31,16 @@ Thumbs.db
 /TutorialInfo
 
 *.csproj
+
+.vscode/
+*.meta
+*.inputactions
+*.png
+*.fbx
+*.jpg
+*.glb
+*.unity
+*.cs
+*.wlt
+*.json
+*.asset
