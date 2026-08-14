@@ -24,6 +24,10 @@ public class powerButton : MonoBehaviour
     private Vector3 unpushedLocalPosition;
     private Material instanceLedMaterial;
 
+    // Direct property IDs from your console log
+    private static readonly int EmissiveFactorProp = Shader.PropertyToID("emissiveFactor");
+    private static readonly int EmissionColorProp = Shader.PropertyToID("_EmissionColor");
+
     void Start()
     {
         Debug.Log("[powerButton] Start initialized on: " + gameObject.name);
@@ -67,7 +71,6 @@ public class powerButton : MonoBehaviour
         ApplyPowerState(false);
     }
 
-    // Call this method via UI Button, Mouse Click, or Interaction Script
     public void TogglePower()
     {
         isPoweredOn = !isPoweredOn;
@@ -88,22 +91,20 @@ public class powerButton : MonoBehaviour
         // B. LED Emission Toggle
         if (instanceLedMaterial != null)
         {
-            if (state)
-            {
-                instanceLedMaterial.EnableKeyword("_EMISSION");
-                instanceLedMaterial.SetColor("_EmissionColor", onEmissionColor);
-                Debug.Log("[powerButton] Emission Enabled: " + onEmissionColor);
-            }
-            else
-            {
-                instanceLedMaterial.SetColor("_EmissionColor", offEmissionColor);
-                instanceLedMaterial.DisableKeyword("_EMISSION");
-                Debug.Log("[powerButton] Emission Disabled.");
-            }
+            Color targetColor = state ? onEmissionColor : offEmissionColor;
+
+            // Target glTF Shader Graph property (emissiveFactor) and standard property (_EmissionColor)
+            instanceLedMaterial.SetColor(EmissiveFactorProp, targetColor);
+            instanceLedMaterial.SetColor(EmissionColorProp, targetColor);
+
+            // Keep required keywords enabled for Shader Graph passes
+            instanceLedMaterial.EnableKeyword("_EMISSIVE");
+            instanceLedMaterial.EnableKeyword("_EMISSION");
+
+            Debug.Log("[powerButton] Applied Emission Color: " + targetColor);
         }
     }
 
-    // Allows clicking directly on the button in Game View to test
     private void OnMouseDown()
     {
         Debug.Log("[powerButton] Mouse Clicked on " + gameObject.name);
