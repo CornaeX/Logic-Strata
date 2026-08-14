@@ -28,7 +28,8 @@
 Thumbs.db
 
 /Settings
-/TutorialInfo
+*/TutorialInfo
+/projectSettings
 
 *.csproj
 
@@ -40,7 +41,7 @@ Thumbs.db
 *.jpg
 *.glb
 *.unity
-*.cs
 *.wlt
 *.json
 *.asset
+*.mat
