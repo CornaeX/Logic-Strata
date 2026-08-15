@@ -15,8 +15,14 @@ public class RotaryKnob : MonoBehaviour
     public float maxAngle = 135f;
 
     [Header("2. Drag Sensitivity")]
-    [Tooltip("How fast the knob turns when dragging the mouse")]
-    public float mouseSensitivity = 0.5f;
+    [Tooltip("Base speed when moving the mouse slowly")]
+    public float baseSensitivity = 0.5f;
+
+    [Tooltip("How much mouse velocity boosts rotation speed")]
+    public float velocityMultiplier = 0.05f;
+
+    [Tooltip("Maximum allowed sensitivity cap to prevent wild over-spinning")]
+    public float maxSensitivityCap = 5.0f;
 
     [Header("3. Initial Value")]
     [Range(0f, 1f)]
@@ -42,11 +48,24 @@ public class RotaryKnob : MonoBehaviour
 
     void OnMouseDrag()
     {
-        Vector3 delta = Input.mousePosition - lastMousePosition;
-        
-        // Drag up/right increases value, down/left decreases value
-        float inputDelta = (delta.y + delta.x) * mouseSensitivity * 0.01f;
-        
+        Vector3 currentMousePosition = Input.mousePosition;
+        Vector3 delta = currentMousePosition - lastMousePosition;
+
+        // Calculate mouse movement speed (pixels per second)
+        float mouseDistance = delta.magnitude;
+        float mouseSpeed = mouseDistance / Mathf.Max(Time.deltaTime, 0.0001f);
+
+        // Dynamic sensitivity: increases linearly with mouse speed
+        float dynamicSensitivity = baseSensitivity + (mouseSpeed * velocityMultiplier * 0.01f);
+        dynamicSensitivity = Mathf.Min(dynamicSensitivity, maxSensitivityCap);
+
+        // Calculate direction (-1 for down/left, +1 for up/right)
+        float direction = Mathf.Sign(delta.y + delta.x);
+        if (delta.x == 0 && delta.y == 0) direction = 0;
+
+        // Apply dynamic rotation step
+        float inputDelta = direction * mouseDistance * dynamicSensitivity * 0.001f;
+
         normalizedValue = Mathf.Clamp01(normalizedValue + inputDelta);
 
         ApplyValueToRotation(normalizedValue);
@@ -54,12 +73,11 @@ public class RotaryKnob : MonoBehaviour
         // Notify display script
         onValueChanged?.Invoke(normalizedValue);
 
-        lastMousePosition = Input.mousePosition;
+        lastMousePosition = currentMousePosition;
     }
 
     private void ApplyValueToRotation(float value)
     {
-        // Interpolate angle based on 0.0 - 1.0 range
         float currentAngle = Mathf.Lerp(minAngle, maxAngle, value);
 
         Vector3 targetEuler = initialLocalRotation;
@@ -74,7 +92,6 @@ public class RotaryKnob : MonoBehaviour
         transform.localRotation = Quaternion.Euler(targetEuler);
     }
 
-    // Call this if another script sets the knob position programmatically
     public void SetNormalizedValue(float value)
     {
         normalizedValue = Mathf.Clamp01(value);
@@ -83,6 +100,5 @@ public class RotaryKnob : MonoBehaviour
     }
 }
 
-// System event wrapper to enable inspector wiring
 [System.Serializable]
 public class UnityEventFloat : UnityEngine.Events.UnityEvent<float> { }
