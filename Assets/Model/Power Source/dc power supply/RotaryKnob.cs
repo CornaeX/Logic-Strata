@@ -78,7 +78,7 @@ public class RotaryKnob : MonoBehaviour
         currentContinuousAngle = Mathf.Clamp(currentContinuousAngle + angleDelta, 0f, maxAllowedAngle);
 
         // Update physical mesh rotation
-        ApplyRotation(currentContinuousAngle);
+        ApplyRotation(-currentContinuousAngle);
 
         // Convert clamped angle directly to normalized value
         normalizedValue = (currentContinuousAngle / 360f) * valuePerTurn;
