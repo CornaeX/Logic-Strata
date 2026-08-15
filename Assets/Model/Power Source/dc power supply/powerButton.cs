@@ -20,6 +20,9 @@ public class powerButton : MonoBehaviour
     [ColorUsage(true, true)] 
     public Color onEmissionColor = Color.red * 4.0f; // ON State (Bright HDR Red)
 
+    [Header("4. Screen Control")]
+    public PowerSupplyDisplay targetDisplay;
+
     private bool isPoweredOn = false;
     private Vector3 unpushedLocalPosition;
     private Material instanceLedMaterial;
@@ -30,23 +33,23 @@ public class powerButton : MonoBehaviour
 
     void Start()
     {
-        Debug.Log("[powerButton] Start initialized on: " + gameObject.name);
+        // Debug.Log("[powerButton] Start initialized on: " + gameObject.name);
 
         // 1. Check for Collider
         if (GetComponent<Collider>() == null)
         {
-            Debug.LogWarning("[powerButton] WARNING: No Collider found on " + gameObject.name + "! OnMouseDown() will NOT work without a BoxCollider or MeshCollider attached.");
+            // Debug.LogWarning("[powerButton] WARNING: No Collider found on " + gameObject.name + "! OnMouseDown() will NOT work without a BoxCollider or MeshCollider attached.");
         }
 
         // 2. Setup Position Reference
         if (buttonTransform != null)
         {
             unpushedLocalPosition = buttonTransform.localPosition;
-            Debug.Log("[powerButton] Stored Resting Position: " + unpushedLocalPosition);
+            // Debug.Log("[powerButton] Stored Resting Position: " + unpushedLocalPosition);
         }
         else
         {
-            Debug.LogError("[powerButton] ERROR: buttonTransform is NOT assigned in the Inspector!");
+            // Debug.LogError("[powerButton] ERROR: buttonTransform is NOT assigned in the Inspector!");
         }
 
         // 3. Setup Material Reference
@@ -55,16 +58,16 @@ public class powerButton : MonoBehaviour
             if (ledMaterialIndex < buttonRenderer.materials.Length)
             {
                 instanceLedMaterial = buttonRenderer.materials[ledMaterialIndex];
-                Debug.Log("[powerButton] Material target successfully assigned: " + instanceLedMaterial.name + " at index " + ledMaterialIndex);
+                // Debug.Log("[powerButton] Material target successfully assigned: " + instanceLedMaterial.name + " at index " + ledMaterialIndex);
             }
             else
             {
-                Debug.LogError("[powerButton] ERROR: ledMaterialIndex " + ledMaterialIndex + " is out of bounds! MeshRenderer only has " + buttonRenderer.materials.Length + " material slots.");
+                // Debug.LogError("[powerButton] ERROR: ledMaterialIndex " + ledMaterialIndex + " is out of bounds! MeshRenderer only has " + buttonRenderer.materials.Length + " material slots.");
             }
         }
         else
         {
-            Debug.LogError("[powerButton] ERROR: buttonRenderer is NOT assigned in the Inspector!");
+            // Debug.LogError("[powerButton] ERROR: buttonRenderer is NOT assigned in the Inspector!");
         }
 
         // Apply starting state (OFF)
@@ -74,7 +77,7 @@ public class powerButton : MonoBehaviour
     public void TogglePower()
     {
         isPoweredOn = !isPoweredOn;
-        Debug.Log("[powerButton] TogglePower called. New Power State: " + (isPoweredOn ? "ON" : "OFF"));
+        // Debug.Log("[powerButton] TogglePower called. New Power State: " + (isPoweredOn ? "ON" : "OFF"));
         ApplyPowerState(isPoweredOn);
     }
 
@@ -85,7 +88,7 @@ public class powerButton : MonoBehaviour
         {
             Vector3 targetPosition = state ? unpushedLocalPosition + pushedOffset : unpushedLocalPosition;
             buttonTransform.localPosition = targetPosition;
-            Debug.Log("[powerButton] Button localPosition set to: " + targetPosition);
+            // Debug.Log("[powerButton] Button localPosition set to: " + targetPosition);
         }
 
         // B. LED Emission Toggle
@@ -101,13 +104,18 @@ public class powerButton : MonoBehaviour
             instanceLedMaterial.EnableKeyword("_EMISSIVE");
             instanceLedMaterial.EnableKeyword("_EMISSION");
 
-            Debug.Log("[powerButton] Applied Emission Color: " + targetColor);
+            // Debug.Log("[powerButton] Applied Emission Color: " + targetColor);
+        }
+
+        if (targetDisplay != null)
+        {
+            targetDisplay.SetPowerState(state);
         }
     }
 
     private void OnMouseDown()
     {
-        Debug.Log("[powerButton] Mouse Clicked on " + gameObject.name);
+        // Debug.Log("[powerButton] Mouse Clicked on " + gameObject.name);
         TogglePower();
     }
 }

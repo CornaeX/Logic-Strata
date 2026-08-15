@@ -45,3 +45,9 @@ Thumbs.db
 *.json
 *.asset
 *.mat
+*.shadergraph
+*.ttf
+*.txt
+*.shader
+/Packages/*
+/Assets/TextMesh Pro
