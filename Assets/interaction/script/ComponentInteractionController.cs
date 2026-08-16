@@ -24,23 +24,24 @@ public class ComponentInteractionController : MonoBehaviour
                 Time.deltaTime * smoothSpeed
             );
 
-            // Ignore input on the exact frame the item was picked up
+            // Skip input check on the frame object is picked up
             if (justPickedUp)
             {
-                justPickedUp = false;
+                if (Input.GetMouseButtonUp(0))
+                {
+                    justPickedUp = false;
+                }
                 return;
             }
 
-            // Confirm Placement
+            // Confirm Placement (Left Click or G)
             if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.G))
             {
-                Debug.Log("[DEBUG] Confirm placement triggered.");
                 TryPlaceComponent();
             }
-            // Cancel Placement
+            // Cancel Placement (Right Click or Escape)
             else if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
             {
-                Debug.Log("[DEBUG] Cancel placement triggered.");
                 CancelPlacement();
             }
         }
@@ -58,41 +59,32 @@ public class ComponentInteractionController : MonoBehaviour
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         RaycastHit[] hits = Physics.RaycastAll(ray, 1000f);
 
-        Debug.Log($"[DEBUG] PickUp Raycast triggered. Total hits under cursor: {hits.Length}");
-
+        // FIRST PASS: Check if the mouse is hovering over ANY interactive knob/button
         foreach (RaycastHit hit in hits)
         {
-            Debug.Log($"[DEBUG] Hit Object: '{hit.collider.name}' | Tag: '{hit.collider.tag}' | Parent: '{hit.collider.transform.root.name}'");
-
-            // Ignore clicks directly on knobs
-            if (hit.collider.CompareTag("Untagged"))
+            if (hit.collider.CompareTag("InteractiveKnob"))
             {
-                Debug.Log("[DEBUG] Clicked on an InteractiveKnob! Aborting pick-up.");
-                return;
+                Debug.Log($"[DEBUG] Direct click on Knob '{hit.collider.name}'. Blocked object movement.");
+                return; // Exit immediately so the object IS NOT picked up
             }
+        }
 
+        // SECOND PASS: If no knob was clicked, check for body component pickup
+        foreach (RaycastHit hit in hits)
+        {
             if (hit.collider.CompareTag("CircuitComponent"))
             {
-                // Grabs the root parent object so everything moves together
                 activeComponent = hit.collider.transform.root.gameObject;
-                Debug.Log($"[DEBUG] Target object for movement set to ROOT: '{activeComponent.name}'");
 
                 if (GridManager.Instance != null)
                 {
                     originalGridPos = GridManager.Instance.WorldToGridPosition(activeComponent.transform.position);
                     GridManager.Instance.UnregisterObject(originalGridPos);
-                    Debug.Log($"[DEBUG] Unregistered '{activeComponent.name}' from Grid cell {originalGridPos}");
-                }
-                else
-                {
-                    Debug.LogWarning("[DEBUG WARNING] GridManager.Instance is NULL!");
                 }
 
                 targetWorldPosition = activeComponent.transform.position;
                 
-                // Disable all colliders across parent and children during drag
                 Collider[] colliders = activeComponent.GetComponentsInChildren<Collider>();
-                Debug.Log($"[DEBUG] Disabling {colliders.Length} colliders on target object during drag.");
                 foreach (Collider c in colliders)
                 {
                     c.enabled = false;
@@ -100,12 +92,10 @@ public class ComponentInteractionController : MonoBehaviour
 
                 isDragging = true;
                 justPickedUp = true;
-                Debug.Log($"[DEBUG] Successfully picked up '{activeComponent.name}'!");
+                Debug.Log($"[DEBUG] Successfully picked up root '{activeComponent.name}'");
                 return;
             }
         }
-
-        Debug.Log("[DEBUG] Raycast completed, but no object with tag 'CircuitComponent' was hit.");
     }
 
     private void UpdateDragPosition()
@@ -125,10 +115,6 @@ public class ComponentInteractionController : MonoBehaviour
                 targetWorldPosition = hit.point;
             }
         }
-        else
-        {
-            Debug.LogWarning("[DEBUG WARNING] Dragging active, but raycast is NOT hitting the 'Ground' layer!");
-        }
     }
 
     private void TryPlaceComponent()
@@ -143,12 +129,13 @@ public class ComponentInteractionController : MonoBehaviour
             {
                 activeComponent.transform.position = targetWorldPosition;
                 GridManager.Instance.RegisterObject(currentGridPos, activeComponent);
-                FinishPlacement();
+                
                 Debug.Log($"[DEBUG] Placed '{activeComponent.name}' at grid cell {currentGridPos}");
+                FinishPlacement(); // Called LAST so activeComponent is not null during logging
             }
             else
             {
-                Debug.LogWarning($"[DEBUG WARNING] Cell {currentGridPos} is occupied!");
+                Debug.LogWarning($"[DEBUG WARNING] Grid cell {currentGridPos} is occupied!");
             }
         }
         else
@@ -168,8 +155,8 @@ public class ComponentInteractionController : MonoBehaviour
             GridManager.Instance.RegisterObject(originalGridPos, activeComponent);
         }
 
-        FinishPlacement();
         Debug.Log("[DEBUG] Placement cancelled.");
+        FinishPlacement();
     }
 
     private void FinishPlacement()
@@ -177,7 +164,6 @@ public class ComponentInteractionController : MonoBehaviour
         if (activeComponent != null)
         {
             Collider[] colliders = activeComponent.GetComponentsInChildren<Collider>();
-            Debug.Log($"[DEBUG] Re-enabling {colliders.Length} colliders on '{activeComponent.name}'.");
             foreach (Collider c in colliders)
             {
                 c.enabled = true;
@@ -186,5 +172,11 @@ public class ComponentInteractionController : MonoBehaviour
 
         activeComponent = null;
         isDragging = false;
+
+        // Clean up ground chunks only after object is dropped
+        if (GridManager.Instance != null)
+        {
+            GridManager.Instance.CheckAndCleanupUnusedChunks();
+        }
     }
 }

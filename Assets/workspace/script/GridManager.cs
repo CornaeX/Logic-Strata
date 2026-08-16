@@ -44,7 +44,7 @@ public class GridManager : MonoBehaviour
         if (gridObjects.ContainsKey(gridPos))
         {
             gridObjects.Remove(gridPos);
-            CheckAndCleanupUnusedChunks();
+            // Removed CheckAndCleanupUnusedChunks() from here
         }
     }
 
