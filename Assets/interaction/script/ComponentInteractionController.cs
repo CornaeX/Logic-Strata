@@ -3,30 +3,45 @@ using UnityEngine;
 public class ComponentInteractionController : MonoBehaviour
 {
     [SerializeField] private LayerMask groundLayer;
+    [SerializeField] private float smoothSpeed = 25f; // Higher = faster snap, Lower = smoother drag
 
     private GameObject activeComponent;
     private Vector2Int originalGridPos;
+    private Vector3 targetWorldPosition;
     private bool isDragging = false;
+    private bool justPickedUp = false;
 
     void Update()
     {
-        // Dragging Phase
         if (isDragging && activeComponent != null)
         {
             UpdateDragPosition();
 
-            // Confirm Placement (Left-Click or 'G')
+            // Smoothly lerp towards target grid coordinate position
+            activeComponent.transform.position = Vector3.Lerp(
+                activeComponent.transform.position, 
+                targetWorldPosition, 
+                Time.deltaTime * smoothSpeed
+            );
+
+            // Ignore input on the exact frame component was picked up
+            if (justPickedUp)
+            {
+                justPickedUp = false;
+                return;
+            }
+
+            // Confirm Placement (Left Click or G)
             if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.G))
             {
                 TryPlaceComponent();
             }
-            // Cancel Placement (Right-Click or Escape)
+            // Cancel Placement (Right Click or Escape)
             else if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
             {
                 CancelPlacement();
             }
         }
-        // Selection / Pick Up Phase (uses 'else if' to prevent triggering on the same frame as placement)
         else if (!isDragging)
         {
             if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.G))
@@ -52,8 +67,9 @@ public class ComponentInteractionController : MonoBehaviour
                     originalGridPos = GridManager.Instance.WorldToGridPosition(activeComponent.transform.position);
                     GridManager.Instance.UnregisterObject(originalGridPos);
                 }
+
+                targetWorldPosition = activeComponent.transform.position;
                 
-                // Disable object collider during drag so raycast passes through to the ground plane
                 Collider componentCollider = activeComponent.GetComponent<Collider>();
                 if (componentCollider != null)
                 {
@@ -61,6 +77,7 @@ public class ComponentInteractionController : MonoBehaviour
                 }
 
                 isDragging = true;
+                justPickedUp = true;
                 Debug.Log($"Picked up {activeComponent.name} successfully!");
                 return;
             }
@@ -77,25 +94,29 @@ public class ComponentInteractionController : MonoBehaviour
             if (GridManager.Instance != null)
             {
                 Vector2Int currentGridPos = GridManager.Instance.WorldToGridPosition(hit.point);
-                activeComponent.transform.position = GridManager.Instance.GridToWorldPosition(currentGridPos);
+                targetWorldPosition = GridManager.Instance.GridToWorldPosition(currentGridPos);
+                
+                // Trigger infinite ground expansion if near workspace bounds
+                GridManager.Instance.CheckAndExpandGrid(currentGridPos);
             }
             else
             {
-                activeComponent.transform.position = hit.point;
+                targetWorldPosition = hit.point;
             }
         }
     }
 
     private void TryPlaceComponent()
     {
-        if (activeComponent == null) return; // Prevent NullReferenceException
+        if (activeComponent == null) return;
 
         if (GridManager.Instance != null)
         {
-            Vector2Int currentGridPos = GridManager.Instance.WorldToGridPosition(activeComponent.transform.position);
+            Vector2Int currentGridPos = GridManager.Instance.WorldToGridPosition(targetWorldPosition);
 
             if (!GridManager.Instance.IsCellOccupied(currentGridPos))
             {
+                activeComponent.transform.position = targetWorldPosition;
                 GridManager.Instance.RegisterObject(currentGridPos, activeComponent);
                 FinishPlacement();
                 Debug.Log($"Placed {activeComponent.name} at grid cell {currentGridPos}");
@@ -117,7 +138,8 @@ public class ComponentInteractionController : MonoBehaviour
 
         if (GridManager.Instance != null)
         {
-            activeComponent.transform.position = GridManager.Instance.GridToWorldPosition(originalGridPos);
+            Vector3 originalWorldPos = GridManager.Instance.GridToWorldPosition(originalGridPos);
+            activeComponent.transform.position = originalWorldPos;
             GridManager.Instance.RegisterObject(originalGridPos, activeComponent);
         }
 
