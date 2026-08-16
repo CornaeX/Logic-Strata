@@ -3,7 +3,7 @@ using UnityEngine;
 public class ComponentInteractionController : MonoBehaviour
 {
     [SerializeField] private LayerMask groundLayer;
-    [SerializeField] private float smoothSpeed = 25f; // Higher = faster snap, Lower = smoother drag
+    [SerializeField] private float smoothSpeed = 25f;
 
     private GameObject activeComponent;
     private Vector2Int originalGridPos;
@@ -17,26 +17,22 @@ public class ComponentInteractionController : MonoBehaviour
         {
             UpdateDragPosition();
 
-            // Smoothly lerp towards target grid coordinate position
             activeComponent.transform.position = Vector3.Lerp(
                 activeComponent.transform.position, 
                 targetWorldPosition, 
                 Time.deltaTime * smoothSpeed
             );
 
-            // Ignore input on the exact frame component was picked up
             if (justPickedUp)
             {
                 justPickedUp = false;
                 return;
             }
 
-            // Confirm Placement (Left Click or G)
             if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.G))
             {
                 TryPlaceComponent();
             }
-            // Cancel Placement (Right Click or Escape)
             else if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
             {
                 CancelPlacement();
@@ -78,7 +74,6 @@ public class ComponentInteractionController : MonoBehaviour
 
                 isDragging = true;
                 justPickedUp = true;
-                Debug.Log($"Picked up {activeComponent.name} successfully!");
                 return;
             }
         }
@@ -95,9 +90,6 @@ public class ComponentInteractionController : MonoBehaviour
             {
                 Vector2Int currentGridPos = GridManager.Instance.WorldToGridPosition(hit.point);
                 targetWorldPosition = GridManager.Instance.GridToWorldPosition(currentGridPos);
-                
-                // Trigger infinite ground expansion if near workspace bounds
-                GridManager.Instance.CheckAndExpandGrid(currentGridPos);
             }
             else
             {
@@ -119,11 +111,6 @@ public class ComponentInteractionController : MonoBehaviour
                 activeComponent.transform.position = targetWorldPosition;
                 GridManager.Instance.RegisterObject(currentGridPos, activeComponent);
                 FinishPlacement();
-                Debug.Log($"Placed {activeComponent.name} at grid cell {currentGridPos}");
-            }
-            else
-            {
-                Debug.LogWarning($"Cell {currentGridPos} is already occupied!");
             }
         }
         else
@@ -144,7 +131,6 @@ public class ComponentInteractionController : MonoBehaviour
         }
 
         FinishPlacement();
-        Debug.Log("Placement cancelled.");
     }
 
     private void FinishPlacement()
