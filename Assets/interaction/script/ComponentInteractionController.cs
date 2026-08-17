@@ -2,84 +2,285 @@ using UnityEngine;
 
 public class ComponentInteractionController : MonoBehaviour
 {
+    [Header("Raycast")]
     [SerializeField] private LayerMask groundLayer;
+    [SerializeField] private float rayDistance = 1000f;
+
+    [Header("Selection")]
+    [SerializeField] private LayerMask componentLayer;
+    [SerializeField] private RuntimeTransformGizmo transformGizmo;
 
     private GameObject activeComponent;
+
     private Vector2Int originalGridPos;
+    private Vector3 originalWorldPosition;
+    private Quaternion originalRotation;
+
     private Vector3 targetWorldPosition;
+
     private bool isDragging = false;
     private bool justPickedUp = false;
 
-    void Update()
+    private GameObject selectedComponent;
+
+    private void Update()
     {
+        HandleKeyboardSelection();
+
         if (isDragging && activeComponent != null)
         {
             UpdateDragPosition();
 
-            // Instant position snapping (smooth movement removed)
             activeComponent.transform.position = targetWorldPosition;
 
-            // Skip input check on the frame object is picked up
             if (justPickedUp)
             {
                 if (Input.GetMouseButtonUp(0))
                 {
                     justPickedUp = false;
                 }
+
                 return;
             }
 
-            // Confirm Placement (Left Click or G)
-            if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.G))
+            // Confirm placement
+            if (Input.GetMouseButtonDown(0) ||
+                Input.GetKeyDown(KeyCode.G))
             {
                 TryPlaceComponent();
             }
-            // Cancel Placement (Right Click or Escape)
-            else if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+
+            // Cancel placement
+            else if (Input.GetMouseButtonDown(1) ||
+                     Input.GetKeyDown(KeyCode.Escape))
             {
                 CancelPlacement();
             }
+
+            return;
         }
-        else if (!isDragging)
-        {
-            if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.G))
-            {
-                TryPickUpComponent();
-            }
-        }
+
+        HandleSelection();
     }
 
-    private void TryPickUpComponent()
-    {
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        RaycastHit[] hits = Physics.RaycastAll(ray, 1000f);
+    // ============================================================
+    // SELECTION
+    // ============================================================
 
-        // FIRST PASS: Check if the mouse is hovering over ANY interactive knob/button
+    private void HandleSelection()
+    {
+        if (!Input.GetMouseButtonDown(0))
+            return;
+
+        // Don't select when clicking the gizmo
+        if (RuntimeTransformGizmo.IsPointerOverGizmo)
+            return;
+
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+
+        RaycastHit[] hits = Physics.RaycastAll(
+            ray,
+            rayDistance
+        );
+
+        GameObject clickedComponent = null;
+
         foreach (RaycastHit hit in hits)
         {
             if (hit.collider.CompareTag("InteractiveKnob"))
             {
-                Debug.Log($"[DEBUG] Direct click on Knob '{hit.collider.name}'. Blocked object movement.");
-                return; // Exit immediately so the object IS NOT picked up
+                // Let the knob system handle this.
+                return;
+            }
+
+            if (hit.collider.CompareTag("CircuitComponent"))
+            {
+                clickedComponent = hit.collider.transform.root.gameObject;
+                break;
             }
         }
 
-        // SECOND PASS: If no knob was clicked, check for body component pickup
+        if (clickedComponent != null)
+        {
+            SelectComponent(clickedComponent);
+        }
+        else
+        {
+            // Click empty space
+            DeselectComponent();
+        }
+    }
+
+    private void SelectComponent(GameObject component)
+    {
+        if (selectedComponent == component)
+            return;
+
+        DeselectComponent();
+
+        selectedComponent = component;
+
+        ComponentSelectionHighlight highlight =
+            selectedComponent.GetComponent<ComponentSelectionHighlight>();
+
+        if (highlight == null)
+        {
+            highlight =
+                selectedComponent.AddComponent<ComponentSelectionHighlight>();
+        }
+
+        highlight.SetSelected(true);
+
+        if (transformGizmo != null)
+        {
+            transformGizmo.SetTarget(selectedComponent);
+        }
+
+        Debug.Log(
+            $"[SELECT] Selected '{selectedComponent.name}'"
+        );
+    }
+
+    public void DeselectComponent()
+    {
+        if (selectedComponent != null)
+        {
+            ComponentSelectionHighlight highlight =
+                selectedComponent.GetComponent<ComponentSelectionHighlight>();
+
+            if (highlight != null)
+                highlight.SetSelected(false);
+        }
+
+        selectedComponent = null;
+
+        if (transformGizmo != null)
+        {
+            transformGizmo.ClearTarget();
+        }
+    }
+
+    // ============================================================
+    // KEYBOARD
+    // ============================================================
+
+    private void HandleKeyboardSelection()
+    {
+        if (selectedComponent == null)
+            return;
+
+        // W = Move mode
+        if (Input.GetKeyDown(KeyCode.W))
+        {
+            if (transformGizmo != null)
+                transformGizmo.SetMoveMode();
+        }
+
+        // E = Rotate mode
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            if (transformGizmo != null)
+                transformGizmo.SetRotateMode();
+        }
+
+        // X axis
+        if (Input.GetKeyDown(KeyCode.X))
+        {
+            if (transformGizmo != null)
+                transformGizmo.SetAxis(
+                    RuntimeTransformGizmo.TransformAxis.X
+                );
+        }
+
+        // Z axis
+        if (Input.GetKeyDown(KeyCode.Z))
+        {
+            if (transformGizmo != null)
+                transformGizmo.SetAxis(
+                    RuntimeTransformGizmo.TransformAxis.Z
+                );
+        }
+
+        // R = rotate 90 degrees
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            selectedComponent.transform.Rotate(
+                Vector3.up,
+                90f,
+                Space.World
+            );
+        }
+
+        // Escape
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (transformGizmo != null)
+                transformGizmo.CancelTransform();
+        }
+    }
+
+    // ============================================================
+    // PICKUP / PLACE
+    // ============================================================
+
+    public void TryPickUpComponent()
+    {
+        Ray ray = Camera.main.ScreenPointToRay(
+            Input.mousePosition
+        );
+
+        RaycastHit[] hits = Physics.RaycastAll(
+            ray,
+            rayDistance
+        );
+
+        // FIRST PASS:
+        // Don't pick up if clicking an interactive knob
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider.CompareTag("InteractiveKnob"))
+            {
+                Debug.Log(
+                    $"[DEBUG] Direct click on Knob '{hit.collider.name}'."
+                );
+
+                return;
+            }
+        }
+
+        // SECOND PASS:
+        // Find component
         foreach (RaycastHit hit in hits)
         {
             if (hit.collider.CompareTag("CircuitComponent"))
             {
-                activeComponent = hit.collider.transform.root.gameObject;
+                activeComponent =
+                    hit.collider.transform.root.gameObject;
+
+                originalWorldPosition =
+                    activeComponent.transform.position;
+
+                originalRotation =
+                    activeComponent.transform.rotation;
 
                 if (GridManager.Instance != null)
                 {
-                    originalGridPos = GridManager.Instance.WorldToGridPosition(activeComponent.transform.position);
-                    GridManager.Instance.UnregisterObject(originalGridPos);
+                    originalGridPos =
+                        GridManager.Instance.WorldToGridPosition(
+                            activeComponent.transform.position
+                        );
+
+                    GridManager.Instance.UnregisterObject(
+                        originalGridPos
+                    );
                 }
 
-                targetWorldPosition = activeComponent.transform.position;
-                
-                Collider[] colliders = activeComponent.GetComponentsInChildren<Collider>();
+                targetWorldPosition =
+                    activeComponent.transform.position;
+
+                Collider[] colliders =
+                    activeComponent.GetComponentsInChildren<Collider>();
+
                 foreach (Collider c in colliders)
                 {
                     c.enabled = false;
@@ -87,7 +288,15 @@ public class ComponentInteractionController : MonoBehaviour
 
                 isDragging = true;
                 justPickedUp = true;
-                Debug.Log($"[DEBUG] Successfully picked up root '{activeComponent.name}'");
+
+                // Hide selection gizmo while placing
+                if (transformGizmo != null)
+                    transformGizmo.ClearTarget();
+
+                Debug.Log(
+                    $"[DEBUG] Picked up '{activeComponent.name}'"
+                );
+
                 return;
             }
         }
@@ -95,44 +304,76 @@ public class ComponentInteractionController : MonoBehaviour
 
     private void UpdateDragPosition()
     {
-        if (activeComponent == null) return;
+        if (activeComponent == null)
+            return;
 
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        // Increased raycast distance from 10f to 1000f
-        if (Physics.Raycast(ray, out RaycastHit hit, 1000f, groundLayer))
+        Ray ray =
+            Camera.main.ScreenPointToRay(
+                Input.mousePosition
+            );
+
+        if (Physics.Raycast(
+            ray,
+            out RaycastHit hit,
+            rayDistance,
+            groundLayer))
         {
             if (GridManager.Instance != null)
             {
-                Vector2Int currentGridPos = GridManager.Instance.WorldToGridPosition(hit.point);
-                targetWorldPosition = GridManager.Instance.GridToWorldPosition(currentGridPos);
+                Vector2Int gridPosition =
+                    GridManager.Instance.WorldToGridPosition(
+                        hit.point
+                    );
+
+                targetWorldPosition =
+                    GridManager.Instance.GridToWorldPosition(
+                        gridPosition
+                    );
             }
             else
             {
-                targetWorldPosition = hit.point;
+                // IMPORTANT:
+                // Keep original Y.
+                targetWorldPosition = new Vector3(
+                    hit.point.x,
+                    originalWorldPosition.y,
+                    hit.point.z
+                );
             }
         }
     }
 
     private void TryPlaceComponent()
     {
-        if (activeComponent == null) return;
+        if (activeComponent == null)
+            return;
 
         if (GridManager.Instance != null)
         {
-            Vector2Int currentGridPos = GridManager.Instance.WorldToGridPosition(targetWorldPosition);
+            Vector2Int currentGridPos =
+                GridManager.Instance.WorldToGridPosition(
+                    targetWorldPosition
+                );
 
-            if (!GridManager.Instance.IsCellOccupied(currentGridPos))
+            if (!GridManager.Instance.IsCellOccupied(
+                currentGridPos))
             {
-                activeComponent.transform.position = targetWorldPosition;
-                GridManager.Instance.RegisterObject(currentGridPos, activeComponent);
-                
-                Debug.Log($"[DEBUG] Placed '{activeComponent.name}' at grid cell {currentGridPos}");
+                activeComponent.transform.position =
+                    targetWorldPosition;
+
+                GridManager.Instance.RegisterObject(
+                    currentGridPos,
+                    activeComponent
+                );
+
                 FinishPlacement();
+
+                return;
             }
-            else
-            {
-                Debug.LogWarning($"[DEBUG WARNING] Grid cell {currentGridPos} is occupied!");
-            }
+
+            Debug.LogWarning(
+                $"[GRID] Cell {currentGridPos} is occupied."
+            );
         }
         else
         {
@@ -142,16 +383,25 @@ public class ComponentInteractionController : MonoBehaviour
 
     private void CancelPlacement()
     {
-        if (activeComponent == null) return;
+        if (activeComponent == null)
+            return;
+
+        activeComponent.transform.position =
+            originalWorldPosition;
+
+        activeComponent.transform.rotation =
+            originalRotation;
 
         if (GridManager.Instance != null)
         {
-            Vector3 originalWorldPos = GridManager.Instance.GridToWorldPosition(originalGridPos);
-            activeComponent.transform.position = originalWorldPos;
-            GridManager.Instance.RegisterObject(originalGridPos, activeComponent);
+            GridManager.Instance.RegisterObject(
+                originalGridPos,
+                activeComponent
+            );
         }
 
         Debug.Log("[DEBUG] Placement cancelled.");
+
         FinishPlacement();
     }
 
@@ -159,7 +409,9 @@ public class ComponentInteractionController : MonoBehaviour
     {
         if (activeComponent != null)
         {
-            Collider[] colliders = activeComponent.GetComponentsInChildren<Collider>();
+            Collider[] colliders =
+                activeComponent.GetComponentsInChildren<Collider>();
+
             foreach (Collider c in colliders)
             {
                 c.enabled = true;
@@ -168,8 +420,8 @@ public class ComponentInteractionController : MonoBehaviour
 
         activeComponent = null;
         isDragging = false;
+        justPickedUp = false;
 
-        // Clean up ground chunks only after object is dropped
         if (GridManager.Instance != null)
         {
             GridManager.Instance.CheckAndCleanupUnusedChunks();
