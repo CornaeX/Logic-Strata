@@ -292,7 +292,7 @@ public class RuntimeTransformGizmo : MonoBehaviour
             hitTransform.IsChildOf(xHandle.transform))
         {
             axis = TransformAxis.X;
-            StartDrag(hit.point);
+            StartDrag(hit.point, ray);
             return;
         }
 
@@ -300,20 +300,22 @@ public class RuntimeTransformGizmo : MonoBehaviour
             hitTransform.IsChildOf(zHandle.transform))
         {
             axis = TransformAxis.Z;
-            StartDrag(hit.point);
+            StartDrag(hit.point, ray);
             return;
         }
 
         if (mode == GizmoMode.Rotate &&
             (hitTransform == rotationHandle.transform ||
-             hitTransform.IsChildOf(rotationHandle.transform)))
+            hitTransform.IsChildOf(rotationHandle.transform)))
         {
             axis = TransformAxis.Y;
-            StartDrag(hit.point);
+            StartDrag(hit.point, ray);
         }
     }
 
-    private void StartDrag(Vector3 hitPoint)
+    private void StartDrag(
+        Vector3 hitPoint,
+        Ray startRay)
     {
         if (target == null)
             return;
@@ -321,23 +323,54 @@ public class RuntimeTransformGizmo : MonoBehaviour
         dragging = true;
         IsPointerOverGizmo = true;
 
-        dragStartWorld = hitPoint;
-
+        // Save the object's exact starting transform.
         targetStartPosition =
             target.transform.position;
 
         targetStartRotation =
             target.transform.rotation;
 
-        // Freeze the gizmo center when rotation starts.
-        // This prevents the center from moving as
-        // the model's renderer bounds change.
+        // Freeze the gizmo center.
         fixedGizmoCenter =
             gizmoRoot.transform.position;
 
         rotationStartOffset =
             targetStartPosition -
             fixedGizmoCenter;
+
+        if (mode == GizmoMode.Move)
+        {
+            // IMPORTANT:
+            // The arrow collider is not on the ground plane.
+            // Project the mouse ray onto the same horizontal
+            // plane that HandleMove() uses.
+
+            Plane movementPlane =
+                new Plane(
+                    Vector3.up,
+                    targetStartPosition
+                );
+
+            if (movementPlane.Raycast(
+                startRay,
+                out float enter))
+            {
+                dragStartWorld =
+                    startRay.GetPoint(enter);
+            }
+            else
+            {
+                dragStartWorld =
+                    targetStartPosition;
+            }
+        }
+        else
+        {
+            // Rotation still starts from the actual
+            // rotation-ring hit point.
+            dragStartWorld =
+                hitPoint;
+        }
     }
 
     // ============================================================
