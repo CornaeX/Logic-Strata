@@ -3,7 +3,6 @@ using UnityEngine;
 public class ComponentInteractionController : MonoBehaviour
 {
     [SerializeField] private LayerMask groundLayer;
-    [SerializeField] private float smoothSpeed = 25f;
 
     private GameObject activeComponent;
     private Vector2Int originalGridPos;
@@ -17,12 +16,8 @@ public class ComponentInteractionController : MonoBehaviour
         {
             UpdateDragPosition();
 
-            // Smooth movement towards grid target
-            activeComponent.transform.position = Vector3.Lerp(
-                activeComponent.transform.position, 
-                targetWorldPosition, 
-                Time.deltaTime * smoothSpeed
-            );
+            // Instant position snapping (smooth movement removed)
+            activeComponent.transform.position = targetWorldPosition;
 
             // Skip input check on the frame object is picked up
             if (justPickedUp)
@@ -131,7 +126,7 @@ public class ComponentInteractionController : MonoBehaviour
                 GridManager.Instance.RegisterObject(currentGridPos, activeComponent);
                 
                 Debug.Log($"[DEBUG] Placed '{activeComponent.name}' at grid cell {currentGridPos}");
-                FinishPlacement(); // Called LAST so activeComponent is not null during logging
+                FinishPlacement();
             }
             else
             {
