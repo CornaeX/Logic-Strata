@@ -48,7 +48,6 @@ Thumbs.db
 *.shadergraph
 *.ttf
 *.txt
-*.shader
 /Packages/*
 /Assets/TextMesh Pro
 *.prefab

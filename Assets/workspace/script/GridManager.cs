@@ -61,7 +61,6 @@ public class GridManager : MonoBehaviour
     {
         if (!activeChunks.ContainsKey(chunkPos))
         {
-            // Spawn origin centered at chunk coordinates
             Vector3 worldPos = new Vector3(
                 (chunkPos.x * chunkSize + chunkSize / 2f) * cellSize,
                 0f,
@@ -71,9 +70,15 @@ public class GridManager : MonoBehaviour
             GameObject newChunk = Instantiate(groundChunkPrefab, worldPos, Quaternion.identity, transform);
             newChunk.name = $"GroundChunk_{chunkPos.x}_{chunkPos.y}";
             
-            // Adjust scale matching chunk dimensions (Unity default plane is 10x10 units)
             float scale = (chunkSize * cellSize) / 10f;
             newChunk.transform.localScale = new Vector3(scale, 1f, scale);
+
+            // Update material cell size to stay synced with GridManager
+            Renderer chunkRenderer = newChunk.GetComponent<Renderer>();
+            if (chunkRenderer != null)
+            {
+                chunkRenderer.material.SetFloat("_CellSize", cellSize);
+            }
 
             activeChunks[chunkPos] = newChunk;
         }
