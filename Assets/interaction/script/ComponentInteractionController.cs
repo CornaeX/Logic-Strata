@@ -98,6 +98,7 @@ public class ComponentInteractionController : MonoBehaviour
         if (activeComponent == null) return;
 
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        // Increased raycast distance from 10f to 1000f
         if (Physics.Raycast(ray, out RaycastHit hit, 1000f, groundLayer))
         {
             if (GridManager.Instance != null)

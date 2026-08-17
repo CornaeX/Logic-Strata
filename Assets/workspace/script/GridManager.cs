@@ -13,10 +13,19 @@ public class GridManager : MonoBehaviour
     private Dictionary<Vector2Int, GameObject> gridObjects = new Dictionary<Vector2Int, GameObject>();
     private Dictionary<Vector2Int, GameObject> activeChunks = new Dictionary<Vector2Int, GameObject>();
 
+    private MaterialPropertyBlock propertyBlock;
+
     private void Awake()
     {
         Instance = this;
-        EnsureChunkExists(Vector2Int.zero);
+        propertyBlock = new MaterialPropertyBlock();
+
+        // Spawn 4 ground chunks centered around origin (0,0)
+        // World positions of chunk centers: (5,5), (-5,5), (5,-5), (-5,-5)
+        EnsureChunkExists(new Vector2Int(0, 0));   // Center at (5, 5)
+        EnsureChunkExists(new Vector2Int(-1, 0));  // Center at (-5, 5)
+        EnsureChunkExists(new Vector2Int(0, -1));  // Center at (5, -5)
+        EnsureChunkExists(new Vector2Int(-1, -1)); // Center at (-5, -5)
     }
 
     public Vector2Int WorldToGridPosition(Vector3 worldPos)
@@ -44,11 +53,9 @@ public class GridManager : MonoBehaviour
         if (gridObjects.ContainsKey(gridPos))
         {
             gridObjects.Remove(gridPos);
-            // Removed CheckAndCleanupUnusedChunks() from here
         }
     }
 
-    // Convert grid cell coordinates to chunk grid coordinates
     private Vector2Int GridToChunkPosition(Vector2Int gridPos)
     {
         int chunkX = Mathf.FloorToInt((float)gridPos.x / chunkSize);
@@ -56,7 +63,6 @@ public class GridManager : MonoBehaviour
         return new Vector2Int(chunkX, chunkY);
     }
 
-    // Spawn chunk ground tile if it doesn't exist yet
     public void EnsureChunkExists(Vector2Int chunkPos)
     {
         if (!activeChunks.ContainsKey(chunkPos))
@@ -73,22 +79,20 @@ public class GridManager : MonoBehaviour
             float scale = (chunkSize * cellSize) / 10f;
             newChunk.transform.localScale = new Vector3(scale, 1f, scale);
 
-            // Update material cell size to stay synced with GridManager
-            Renderer chunkRenderer = newChunk.GetComponent<Renderer>();
-            if (chunkRenderer != null)
-            {
-                chunkRenderer.material.SetFloat("_CellSize", cellSize);
-            }
-
             activeChunks[chunkPos] = newChunk;
         }
     }
 
-    // Iterate active chunks and delete any empty ones (except origin 0,0)
     public void CheckAndCleanupUnusedChunks()
     {
-        HashSet<Vector2Int> requiredChunks = new HashSet<Vector2Int>();
-        requiredChunks.Add(Vector2Int.zero); // Keep origin chunk always active
+        HashSet<Vector2Int> requiredChunks = new HashSet<Vector2Int>
+        {
+            // Keep all 4 initial centered chunks active
+            new Vector2Int(0, 0),
+            new Vector2Int(-1, 0),
+            new Vector2Int(0, -1),
+            new Vector2Int(-1, -1)
+        };
 
         foreach (var gridPos in gridObjects.Keys)
         {

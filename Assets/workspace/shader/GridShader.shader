@@ -2,20 +2,24 @@ Shader "Unlit/GridShader"
 {
     Properties
     {
-        _CellSize ("Cell Size", Float) = 1.0
-        _GridLineWidth ("Grid Line Width", Range(0.001, 0.1)) = 0.02
-        _AxisLineWidth ("Axis Line Width", Range(0.001, 0.2)) = 0.05
+        _CellSize ("Cell Size", Float) = 0.1
+        _LineWidth ("Grid Line Width", Range(0.001, 0.2)) = 0.03
+        _AxisWidth ("Axis Line Width", Range(0.001, 0.5)) = 0.08
         
-        _GroundColor ("Ground Color", Color) = (0.15, 0.15, 0.15, 1.0)
-        _GridColor ("Grid Line Color", Color) = (0.3, 0.3, 0.3, 1.0)
-        _XAxisColor ("X-Axis Color (Red)", Color) = (0.9, 0.2, 0.2, 1.0)
-        _YAxisColor ("Y-Axis Color (Green)", Color) = (0.2, 0.9, 0.2, 1.0)
+        _GroundColor ("Ground Color", Color) = (0.2, 0.2, 0.2, 1.0)
+        _GridColor ("Grid Line Color", Color) = (0.5, 0.5, 0.5, 1.0)
+        _XAxisColor ("X-Axis Color (Red)", Color) = (1.0, 0.1, 0.1, 1.0)
+        _YAxisColor ("Y-Axis Color (Green)", Color) = (0.1, 1.0, 0.1, 1.0)
     }
 
     SubShader
     {
-        Tags { "RenderType"="Opaque" "Queue"="Geometry" }
+        Tags { "RenderType"="Transparent" "Queue"="Transparent" }
         LOD 100
+        
+        Cull Off 
+        ZWrite On
+        Blend SrcAlpha OneMinusSrcAlpha
 
         Pass
         {
@@ -36,8 +40,8 @@ Shader "Unlit/GridShader"
             };
 
             float _CellSize;
-            float _GridLineWidth;
-            float _AxisLineWidth;
+            float _LineWidth;
+            float _AxisWidth;
             fixed4 _GroundColor;
             fixed4 _GridColor;
             fixed4 _XAxisColor;
@@ -53,27 +57,30 @@ Shader "Unlit/GridShader"
 
             fixed4 frag (v2f i) : SV_Target
             {
-                // Calculate grid cell distance using world X and Z coordinates
-                float2 coord = i.worldPos.xz / _CellSize;
-                float2 gridFrac = abs(frac(coord - 0.5) - 0.5);
+                float safeSize = max(_CellSize, 0.001);
                 
-                // Screen-space anti-aliasing for clean lines at any camera distance
-                float2 dcoord = fwidth(coord);
-                float2 gridLines = smoothstep(dcoord * _GridLineWidth * 50.0, float2(0,0), gridFrac);
-                float isGrid = max(gridLines.x, gridLines.y);
+                // FIX: Scale world position coordinates by cell size frequency 
+                // so grid lines repeat every _CellSize units in world space
+                float2 coord = i.worldPos.xz / safeSize;
+                float2 g = frac(coord);
+                float2 derivative = fwidth(coord);
+                
+                // Screen-space anti-aliased grid lines (prevents shimmering)
+                float2 lineDist = min(g, 1.0 - g);
+                float2 gridWidth = max(float2(_LineWidth, _LineWidth), derivative);
+                float gridFactor =-min(min(lineDist.x, lineDist.y), 1.0); // handled via step or smoothstep
+                
+                float isGrid = step(min(lineDist.x, lineDist.y), _LineWidth * 0.5);
 
-                // Check distance to World X-axis (Z = 0) and World Y/Z-axis (X = 0)
-                float distToXAxis = abs(i.worldPos.z); // Red line running along X
-                float distToYAxis = abs(i.worldPos.x); // Green line running along Z/Y
+                float isXAxis = step(abs(i.worldPos.z), _AxisWidth); 
+                float isYAxis = step(abs(i.worldPos.x), _AxisWidth); 
 
-                float isXAxis = 1.0 - smoothstep(0.0, _AxisLineWidth, distToXAxis);
-                float isYAxis = 1.0 - smoothstep(0.0, _AxisLineWidth, distToYAxis);
-
-                // Composite Colors: Base Ground -> Grid Lines -> Red/Green Axes
                 fixed4 finalColor = _GroundColor;
                 finalColor = lerp(finalColor, _GridColor, isGrid);
                 finalColor = lerp(finalColor, _XAxisColor, isXAxis);
                 finalColor = lerp(finalColor, _YAxisColor, isYAxis);
+
+                finalColor.a = 1.0; 
 
                 return finalColor;
             }
