@@ -53,6 +53,9 @@ public class RuntimeTransformGizmo : MonoBehaviour
 
     private Quaternion targetStartRotation;
 
+    private Vector3 fixedGizmoCenter;
+    private Vector3 rotationStartOffset;
+
     private Camera mainCamera;
 
     private Material xMaterial;
@@ -316,7 +319,6 @@ public class RuntimeTransformGizmo : MonoBehaviour
             return;
 
         dragging = true;
-
         IsPointerOverGizmo = true;
 
         dragStartWorld = hitPoint;
@@ -326,6 +328,16 @@ public class RuntimeTransformGizmo : MonoBehaviour
 
         targetStartRotation =
             target.transform.rotation;
+
+        // Freeze the gizmo center when rotation starts.
+        // This prevents the center from moving as
+        // the model's renderer bounds change.
+        fixedGizmoCenter =
+            gizmoRoot.transform.position;
+
+        rotationStartOffset =
+            targetStartPosition -
+            fixedGizmoCenter;
     }
 
     // ============================================================
@@ -419,13 +431,21 @@ public class RuntimeTransformGizmo : MonoBehaviour
 
     private void HandleRotate(Ray ray)
     {
-        Plane groundPlane =
+        if (target == null)
+            return;
+
+        // Use the rotation center captured when
+        // the mouse started dragging.
+        Vector3 rotationCenter =
+            fixedGizmoCenter;
+
+        Plane rotationPlane =
             new Plane(
                 Vector3.up,
-                targetStartPosition
+                rotationCenter
             );
 
-        if (!groundPlane.Raycast(
+        if (!rotationPlane.Raycast(
             ray,
             out float enter))
         {
@@ -437,18 +457,21 @@ public class RuntimeTransformGizmo : MonoBehaviour
 
         Vector3 startDirection =
             dragStartWorld -
-            targetStartPosition;
+            rotationCenter;
 
         Vector3 currentDirection =
             currentPoint -
-            targetStartPosition;
+            rotationCenter;
 
+        // Only use the X/Z plane.
         startDirection.y = 0f;
         currentDirection.y = 0f;
 
-        if (startDirection.sqrMagnitude < 0.001f ||
-            currentDirection.sqrMagnitude < 0.001f)
+        if (startDirection.sqrMagnitude < 0.0001f ||
+            currentDirection.sqrMagnitude < 0.0001f)
+        {
             return;
+        }
 
         startDirection.Normalize();
         currentDirection.Normalize();
@@ -460,19 +483,30 @@ public class RuntimeTransformGizmo : MonoBehaviour
                 Vector3.up
             );
 
-        // Snap rotation to 15 degrees
+        // Snap rotation to 15 degree increments.
         angle =
             Mathf.Round(
                 angle / 15f
             ) * 15f;
 
-        target.transform.rotation =
-            targetStartRotation *
-            Quaternion.Euler(
-                0f,
+        Quaternion rotation =
+            Quaternion.AngleAxis(
                 angle,
-                0f
+                Vector3.up
             );
+
+        // Rotate around the fixed gizmo center.
+        Vector3 rotatedOffset =
+            rotation *
+            rotationStartOffset;
+
+        target.transform.position =
+            rotationCenter +
+            rotatedOffset;
+
+        target.transform.rotation =
+            rotation *
+            targetStartRotation;
     }
 
     // ============================================================
