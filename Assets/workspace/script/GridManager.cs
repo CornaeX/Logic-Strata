@@ -5,27 +5,25 @@ public class GridManager : MonoBehaviour
 {
     public static GridManager Instance { get; private set; }
 
-    [Header("Grid Settings")]
-    [SerializeField] public float cellSize = 1.0f;
+    [Header("Grid Movement & Snapping")]
+    [SerializeField] public float cellSize = 0.001f; // Now this can safely be 0.001 for fine movement!
+
+    [Header("Ground Chunk Settings")]
     [SerializeField] private GameObject groundChunkPrefab;
-    [SerializeField] private int chunkSize = 10; // 10x10 cells per chunk
+    [SerializeField] private int chunkSize = 10; 
+    [SerializeField] private float chunkVisualScale = 1.0f; // Set this in Inspector to whatever size your plane prefab needs to be (e.g., 1 or 10)
 
     private Dictionary<Vector2Int, GameObject> gridObjects = new Dictionary<Vector2Int, GameObject>();
     private Dictionary<Vector2Int, GameObject> activeChunks = new Dictionary<Vector2Int, GameObject>();
 
-    private MaterialPropertyBlock propertyBlock;
-
     private void Awake()
     {
         Instance = this;
-        propertyBlock = new MaterialPropertyBlock();
 
-        // Spawn 4 ground chunks centered around origin (0,0)
-        // World positions of chunk centers: (5,5), (-5,5), (5,-5), (-5,-5)
-        EnsureChunkExists(new Vector2Int(0, 0));   // Center at (5, 5)
-        EnsureChunkExists(new Vector2Int(-1, 0));  // Center at (-5, 5)
-        EnsureChunkExists(new Vector2Int(0, -1));  // Center at (5, -5)
-        EnsureChunkExists(new Vector2Int(-1, -1)); // Center at (-5, -5)
+        EnsureChunkExists(new Vector2Int(0, 0));  
+        EnsureChunkExists(new Vector2Int(-1, 0)); 
+        EnsureChunkExists(new Vector2Int(0, -1)); 
+        EnsureChunkExists(new Vector2Int(-1, -1)); 
     }
 
     public Vector2Int WorldToGridPosition(Vector3 worldPos)
@@ -76,8 +74,8 @@ public class GridManager : MonoBehaviour
             GameObject newChunk = Instantiate(groundChunkPrefab, worldPos, Quaternion.identity, transform);
             newChunk.name = $"GroundChunk_{chunkPos.x}_{chunkPos.y}";
             
-            float scale = (chunkSize * cellSize) / 10f;
-            newChunk.transform.localScale = new Vector3(scale, 1f, scale);
+            // Uses independent visual scale so your plane won't shrink to nothing
+            newChunk.transform.localScale = new Vector3(chunkVisualScale, 1f, chunkVisualScale);
 
             activeChunks[chunkPos] = newChunk;
         }
@@ -87,7 +85,6 @@ public class GridManager : MonoBehaviour
     {
         HashSet<Vector2Int> requiredChunks = new HashSet<Vector2Int>
         {
-            // Keep all 4 initial centered chunks active
             new Vector2Int(0, 0),
             new Vector2Int(-1, 0),
             new Vector2Int(0, -1),

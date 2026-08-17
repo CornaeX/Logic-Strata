@@ -2,19 +2,19 @@ using UnityEngine;
 
 public class CameraController : MonoBehaviour
 {
-    [Header("Movement Settings (WASD)")]
-    [SerializeField] private float baseMoveSpeed = 10f;
-    [SerializeField] private float fastMoveMultiplier = 2f;
+    [Header("Starter Setup (Blender Default View)")]
+    [SerializeField] private Vector3 starterPosition = new Vector3(0f, 5f, -10f);
+    [SerializeField] private Vector3 starterRotation = new Vector3(30f, 0f, 0f);
 
-    [Header("Rotation Settings")]
+    [Header("Rotation Settings (Orbit)")]
     [SerializeField] private float lookSensitivity = 2f;
-    [SerializeField] private float minPitch = -80f;
-    [SerializeField] private float maxPitch = 80f;
+    [SerializeField] private float minPitch = -89f;
+    [SerializeField] private float maxPitch = 89f;
 
     [Header("Blender Distance-Based Scaling")]
-    [SerializeField] private float baseZoomSpeed = 5f;
+    [SerializeField] private float baseZoomSpeed = 10f;
     [SerializeField] private float minDistanceThreshold = 0.5f; // Prevents speed reaching zero
-    [SerializeField] private float distanceScaleFactor = 0.15f; // How strongly distance affects speed
+    [SerializeField] private float distanceScaleFactor = 0.5f;  // How strongly distance affects speed
     [SerializeField] private LayerMask focusLayerMask = ~0;      // Layers to detect pivot point
 
     private float pitch = 0f;
@@ -25,22 +25,27 @@ public class CameraController : MonoBehaviour
 
     void Start()
     {
+        // 1. Force initial position and rotation close to (0,0,0) looking inward
+        transform.position = starterPosition;
+        transform.rotation = Quaternion.Euler(starterRotation);
+
         Vector3 angles = transform.eulerAngles;
         pitch = angles.x;
         yaw = angles.y;
 
+        // 2. Set initial pivot explicitly to world origin (0,0,0) or straight ahead
+        currentPivotPoint = Vector3.zero;
+        currentDistance = Vector3.Distance(transform.position, currentPivotPoint);
+        
         UpdatePivotAndDistance();
     }
 
     void Update()
     {
-        UpdatePivotAndDistance();
-
         // Calculate dynamic speed multiplier based on distance to the pivot point
         float distanceMultiplier = Mathf.Max(currentDistance * distanceScaleFactor, minDistanceThreshold);
 
-        HandleWASDMovement(distanceMultiplier);
-        HandleLookAndPan(distanceMultiplier);
+        HandleOrbitAndPan(distanceMultiplier);
         HandleZoom(distanceMultiplier);
         HandleFocus();
 
@@ -49,7 +54,6 @@ public class CameraController : MonoBehaviour
 
     private void UpdatePivotAndDistance()
     {
-        // Raycast forward from screen center to find the pivot point
         Ray ray = new Ray(transform.position, transform.forward);
         if (Physics.Raycast(ray, out RaycastHit hit, 1000f, focusLayerMask))
         {
@@ -58,35 +62,14 @@ public class CameraController : MonoBehaviour
         }
         else
         {
-            // Fallback if looking at empty sky
             currentDistance = Vector3.Distance(transform.position, currentPivotPoint);
         }
     }
 
-    private void HandleWASDMovement(float distanceMultiplier)
+    private void HandleOrbitAndPan(float distanceMultiplier)
     {
-        float inputX = Input.GetAxisRaw("Horizontal");
-        float inputZ = Input.GetAxisRaw("Vertical");
-        float inputY = 0f;
-
-        if (Input.GetKey(KeyCode.E)) inputY = 1f;
-        if (Input.GetKey(KeyCode.Q)) inputY = -1f;
-
-        Vector3 moveDirection = (transform.right * inputX + transform.up * inputY + transform.forward * inputZ).normalized;
-
-        float speed = baseMoveSpeed * distanceMultiplier;
-        if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
-        {
-            speed *= fastMoveMultiplier;
-        }
-
-        transform.position += moveDirection * speed * Time.deltaTime;
-    }
-
-    private void HandleLookAndPan(float distanceMultiplier)
-    {
-        // Middle Mouse Drag: Orbit / Look Around
-        if (Input.GetMouseButton(2) && !Input.GetKey(KeyCode.LeftShift))
+        // 1. Middle Mouse Drag: Orbit around pivot point (Blender Style)
+        if (Input.GetMouseButton(2) && !Input.GetKey(KeyCode.LeftShift) && !Input.GetKey(KeyCode.RightShift))
         {
             Vector3 delta = Input.mousePosition - lastMousePosition;
 
@@ -94,14 +77,21 @@ public class CameraController : MonoBehaviour
             pitch -= delta.y * lookSensitivity * 0.1f;
             pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
 
-            transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
+            // Apply rotation
+            Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
+            transform.rotation = rotation;
+
+            // Maintain position relative to the pivot point so it orbits around it
+            transform.position = currentPivotPoint - (rotation * Vector3.forward * currentDistance);
         }
-        // Middle Mouse + Shift: Screen Pan (Scales with distance)
-        else if (Input.GetMouseButton(2) && Input.GetKey(KeyCode.LeftShift))
+        // 2. Shift + Middle Mouse: Pan view laterally
+        else if (Input.GetMouseButton(2) && (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)))
         {
             Vector3 delta = Input.mousePosition - lastMousePosition;
-            Vector3 move = (-transform.right * delta.x - transform.up * delta.y) * (distanceMultiplier * 0.01f);
-            transform.position += move;
+            Vector3 panMove = (-transform.right * delta.x - transform.up * delta.y) * (distanceMultiplier * 0.005f * lookSensitivity);
+            
+            transform.position += panMove;
+            currentPivotPoint += panMove; // Move pivot along with camera pan
         }
     }
 
@@ -110,22 +100,31 @@ public class CameraController : MonoBehaviour
         float scroll = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(scroll) > 0.01f)
         {
-            // Zoom speed dynamically scales with distance to center
+            // Zoom moves forward/backward and scales dynamically based on distance
             float zoomAmount = scroll * baseZoomSpeed * distanceMultiplier;
             transform.position += transform.forward * zoomAmount;
+
+            // Recalculate distance after zooming
+            UpdatePivotAndDistance();
         }
     }
 
     private void HandleFocus()
     {
-        // Press 'F' to focus and jump closer to target object under cursor
+        // Press 'F' to focus on the object under the mouse cursor (Blender 'F' key behavior)
         if (Input.GetKeyDown(KeyCode.F))
         {
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             if (Physics.Raycast(ray, out RaycastHit hit, 1000f, focusLayerMask))
             {
                 currentPivotPoint = hit.point;
-                transform.position = hit.point - transform.forward * 2f;
+                currentDistance = Vector3.Distance(transform.position, currentPivotPoint);
+                
+                if (currentDistance > 10f)
+                {
+                    currentDistance = 5f;
+                    transform.position = currentPivotPoint - transform.forward * currentDistance;
+                }
             }
         }
     }
