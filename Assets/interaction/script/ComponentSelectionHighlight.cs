@@ -1,128 +1,193 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public class ComponentSelectionHighlight : MonoBehaviour
 {
-    private Renderer[] renderers;
+    [Header("Highlight")]
+    [SerializeField]
+    private Color highlightColor =
+        new Color(0.05f, 0.8f, 1f, 1f);
 
-    private Color[] originalColors;
+    [SerializeField]
+    private float outlineSize = 0.035f;
 
-    private void Awake()
+    private GameObject outlineObject;
+
+    private Material outlineMaterial;
+
+    public void SetOutlineMaterial(Material material)
     {
-        renderers =
-            GetComponentsInChildren<Renderer>(true);
-
-        originalColors =
-            new Color[renderers.Length];
-
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            Renderer renderer = renderers[i];
-
-            if (renderer == null)
-                continue;
-
-            Material material =
-                renderer.material;
-
-            if (material.HasProperty("_BaseColor"))
-            {
-                originalColors[i] =
-                    material.GetColor("_BaseColor");
-            }
-            else if (material.HasProperty("_Color"))
-            {
-                originalColors[i] =
-                    material.GetColor("_Color");
-            }
-            else
-            {
-                originalColors[i] =
-                    Color.white;
-            }
-        }
+        outlineMaterial = material;
     }
 
     public void SetSelected(bool selected)
     {
         if (selected)
         {
-            EnableHighlight();
+            ShowHighlight();
         }
         else
         {
-            DisableHighlight();
+            HideHighlight();
         }
     }
 
-    private void EnableHighlight()
+    private void ShowHighlight()
     {
-        Debug.Log(
-            "[HIGHLIGHT] ENABLED: " +
-            gameObject.name
-        );
-
-        for (int i = 0; i < renderers.Length; i++)
+        if (outlineObject != null)
         {
-            Renderer renderer = renderers[i];
+            outlineObject.SetActive(true);
+            return;
+        }
 
-            if (renderer == null)
-                continue;
+        CreateHighlight();
+    }
 
-            Material material =
-                renderer.material;
-
-            // HDRP Lit
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor(
-                    "_BaseColor",
-                    Color.cyan
-                );
-            }
-
-            // Standard / other shaders
-            if (material.HasProperty("_Color"))
-            {
-                material.SetColor(
-                    "_Color",
-                    Color.cyan
-                );
-            }
+    private void HideHighlight()
+    {
+        if (outlineObject != null)
+        {
+            outlineObject.SetActive(false);
         }
     }
 
-    private void DisableHighlight()
+    private void CreateHighlight()
     {
+        outlineObject = new GameObject(
+            "Selection Highlight"
+        );
+
+        outlineObject.transform.SetParent(
+            transform,
+            false
+        );
+
+        outlineObject.transform.localPosition =
+            Vector3.zero;
+
+        outlineObject.transform.localRotation =
+            Quaternion.identity;
+
+        outlineObject.transform.localScale =
+            Vector3.one;
+
+        Renderer[] renderers =
+            GetComponentsInChildren<Renderer>(
+                true
+            );
+
         Debug.Log(
-            "[HIGHLIGHT] DISABLED: " +
+            "[HIGHLIGHT] Found " +
+            renderers.Length +
+            " renderers on " +
             gameObject.name
         );
 
-        for (int i = 0; i < renderers.Length; i++)
+        foreach (Renderer original in renderers)
         {
-            Renderer renderer = renderers[i];
-
-            if (renderer == null)
+            // Don't process the highlight itself
+            if (original.gameObject == outlineObject ||
+                original.transform.IsChildOf(
+                    outlineObject.transform
+                ))
+            {
                 continue;
-
-            Material material =
-                renderer.material;
-
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor(
-                    "_BaseColor",
-                    originalColors[i]
-                );
             }
 
-            if (material.HasProperty("_Color"))
+            MeshFilter meshFilter =
+                original.GetComponent<MeshFilter>();
+
+            if (meshFilter == null)
             {
-                material.SetColor(
-                    "_Color",
-                    originalColors[i]
+                Debug.LogWarning(
+                    "[HIGHLIGHT] No MeshFilter on " +
+                    original.name
                 );
+
+                continue;
             }
+
+            if (meshFilter.sharedMesh == null)
+            {
+                Debug.LogWarning(
+                    "[HIGHLIGHT] No mesh on " +
+                    original.name
+                );
+
+                continue;
+            }
+
+            CreateOutlineMesh(
+                original,
+                meshFilter.sharedMesh
+            );
+        }
+    }
+
+    private void CreateOutlineMesh(
+        Renderer originalRenderer,
+        Mesh mesh
+    )
+    {
+        GameObject outlineMesh =
+            new GameObject(
+                originalRenderer.gameObject.name +
+                "_Highlight"
+            );
+
+        outlineMesh.transform.SetParent(
+            outlineObject.transform,
+            true
+        );
+
+        // Match the original object's transform exactly.
+        outlineMesh.transform.position =
+            originalRenderer.transform.position;
+
+        outlineMesh.transform.rotation =
+            originalRenderer.transform.rotation;
+
+        outlineMesh.transform.localScale =
+            originalRenderer.transform.lossyScale *
+            (1f + outlineSize);
+
+        MeshFilter filter =
+            outlineMesh.AddComponent<MeshFilter>();
+
+        filter.sharedMesh = mesh;
+
+        MeshRenderer renderer =
+            outlineMesh.AddComponent<MeshRenderer>();
+
+        if (outlineMaterial == null)
+        {
+            Debug.LogError(
+                "[HIGHLIGHT] Outline material is not assigned!"
+            );
+
+            Destroy(outlineMesh);
+            return;
+        }
+
+        renderer.sharedMaterial =
+            outlineMaterial;
+
+        // Don't cast shadows.
+        renderer.shadowCastingMode =
+            ShadowCastingMode.Off;
+
+        renderer.receiveShadows = false;
+
+        // Make sure the highlight is rendered
+        // after the original object.
+        renderer.sortingOrder = 100;
+    }
+
+    private void OnDestroy()
+    {
+        if (outlineObject != null)
+        {
+            Destroy(outlineObject);
         }
     }
 }

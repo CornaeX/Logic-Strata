@@ -10,6 +10,8 @@ public class ComponentInteractionController : MonoBehaviour
     [SerializeField] private LayerMask componentLayer;
     [SerializeField] private RuntimeTransformGizmo transformGizmo;
 
+    [SerializeField] private Material selectionOutlineMaterial;
+
     private GameObject activeComponent;
 
     private Vector2Int originalGridPos;
@@ -95,7 +97,16 @@ public class ComponentInteractionController : MonoBehaviour
 
             if (hit.collider.CompareTag("CircuitComponent"))
             {
-                clickedComponent = hit.collider.transform.root.gameObject;
+                clickedComponent =
+                    hit.collider.transform.root.gameObject;
+
+                Debug.Log(
+                    "[SELECT] Collider: " +
+                    hit.collider.name +
+                    " → Root: " +
+                    clickedComponent.name
+                );
+
                 break;
             }
         }
@@ -129,6 +140,10 @@ public class ComponentInteractionController : MonoBehaviour
                 selectedComponent.AddComponent<ComponentSelectionHighlight>();
         }
 
+        highlight.SetOutlineMaterial(
+            selectionOutlineMaterial
+        );
+
         highlight.SetSelected(true);
 
         if (transformGizmo != null)
@@ -143,6 +158,11 @@ public class ComponentInteractionController : MonoBehaviour
 
     public void DeselectComponent()
     {
+        if (selectedComponent == activeComponent)
+        {
+            return;
+        }
+
         if (selectedComponent != null)
         {
             ComponentSelectionHighlight highlight =
